@@ -3,6 +3,6 @@ name = "lambda_calc"
 version = "0.1.0"
 edition = "2024"
 
+
 [dependencies]
-readline = { path = "./readline" }
-ariadne = { version = "0.5.1", features = ["auto-color"] }
+regex = "1"
