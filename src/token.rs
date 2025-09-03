@@ -10,6 +10,7 @@ pub enum TokenValue {
     LParen,
     RParen,
     Eq,
+    ChurchNumber(u32),
     EOF
 }
 
@@ -22,6 +23,7 @@ impl Display for TokenValue {
             TokenValue::LParen => write!(f, "("),
             TokenValue::RParen => write!(f, ")"),
             TokenValue::Eq => write!(f, "="),
+            TokenValue::ChurchNumber(n) => write!(f, "c{}", n),
             TokenValue::EOF => write!(f, "<EOF>"),
         }
     }

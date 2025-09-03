@@ -71,6 +71,26 @@ impl Expr {
         }
     }
 
+    /// Generate a Church numeral for the given number
+    /// Church numeral for n is λf.λx.(f (f ... (f x) ... ))
+    /// where f is applied n times to x
+    pub fn church_numeral(n: u32) -> Self {
+        let f = Rc::new("f".to_string());
+        let x = Rc::new("x".to_string());
+        
+        // Build the inner application: f applied n times to x
+        let mut body = Expr::Var(x.clone());
+        for _ in 0..n {
+            body = Expr::App(Box::new(Expr::Var(f.clone())), Box::new(body));
+        }
+        
+        // Wrap in λx.body
+        let inner_abs = Expr::Abs(x, Box::new(body));
+        
+        // Wrap in λf.inner_abs  
+        Expr::Abs(f, Box::new(inner_abs))
+    }
+
     /// Analyze variable binding: produce an `AnalyzedExpr` where each variable is
     /// labeled `Free` or `Bound(name, debruijn_index)` (index counts binders
     /// between occurrence and its binder).
