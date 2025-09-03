@@ -1,0 +1,12 @@
+[package]
+name = "readline"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+crossterm = "0.27"
+arboard = "3.2"
+
+[lib]
+name = "readline"
+path = "src/lib.rs"

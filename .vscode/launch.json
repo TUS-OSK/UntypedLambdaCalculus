@@ -1,0 +1,19 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug lambda_calc",
+            "cargo": {
+                "args": ["build", "--bin=lambda_calc", "--lib"],  // Build both
+                "filter": {
+                    "name": "lambda_calc",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
