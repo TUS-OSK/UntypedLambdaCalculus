@@ -1,7 +1,0 @@
-tru = Abs(t, Abs(f, Bound(t, #1)))
-fls = Abs(t, Abs(f, Bound(f, #0)))
-and = Abs(b, Abs(c, App(App(Bound(b, #1), Bound(c, #0)), Free(fls))))
-or = Abs(b, Abs(c, App(App(Bound(b, #1), Free(tru)), Bound(c, #0))))
-not = Abs(b, App(App(Bound(b, #0), Free(fls)), Free(tru)))
-c0 = Abs(s, Abs(z, Bound(z, #0)))
-scc = Abs(n, Abs(s, Abs(z, App(Bound(s, #1), App(App(Bound(n, #2), Bound(s, #1)), Bound(z, #0))))))
