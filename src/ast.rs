@@ -149,7 +149,11 @@ impl Display for AnalyzedExpr {
 
 impl AnalyzedExpr {
     fn is_value(&self) -> bool {
-        matches!(self, AnalyzedExpr::Abs(_, _) | AnalyzedExpr::Free(_) | AnalyzedExpr::Bound(_, _))
+        match self {
+            AnalyzedExpr::Abs(_, _) | AnalyzedExpr::Free(_) => true,
+            AnalyzedExpr::App(func, arg) => matches!(func.as_ref(), AnalyzedExpr::Free(_)) && arg.is_value(),
+            _ => false
+        }
     }
 
     /// Shift (in-place): modify self by shifting bound indices by d for indices >= cutoff
@@ -461,7 +465,13 @@ mod tests {
         let expr = Expr::App(Box::new(id.clone()), Box::new(Expr::App(Box::new(id.clone()), Box::new(Expr::Abs(Rc::new("z".into()), Box::new(Expr::App(Box::new(id.clone()), Box::new(Expr::Var(Rc::new("z".into()))))))))));
         let mut a = expr.analyze();
         a.reduce();
-        let want = AnalyzedExpr::Abs(Rc::new("z".into()), Box::new(AnalyzedExpr::Bound(Rc::new("z".into()), 0)));
+        let want = AnalyzedExpr::Abs(
+            Rc::new("z".into()),
+            Box::new(AnalyzedExpr::App(
+                Box::new(AnalyzedExpr::Abs(Rc::new("x".into()), Box::new(AnalyzedExpr::Bound(Rc::new("x".into()), 0)))),
+                Box::new(AnalyzedExpr::Bound(Rc::new("z".into()), 0)),
+            )),
+        );
         assert_eq!(a, want);
     }
 
