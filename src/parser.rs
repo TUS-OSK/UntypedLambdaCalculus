@@ -99,9 +99,12 @@ impl Parser {
         self.parse_tailing_rec(Expr::App(Box::new(left), Box::new(right)))
     }
 
-    // A -> Ident | App | (E)
+    // A -> Ident | ChurchNumber | App | (E)
     fn parse_atom(&mut self) -> Result<Option<Expr>, ParseError> {
         if let Some(expr) = self.parse_ident()? {
+            return Ok(Some(expr));
+        }
+        if let Some(expr) = self.parse_church_number()? {
             return Ok(Some(expr));
         }
         if let Some(expr) = self.parse_abs()? {
@@ -118,6 +121,16 @@ impl Parser {
             TokenValue::Ident(name) => {
                 self.lexer.next_token()?;
                 Ok(Some(Expr::Var(name)))
+            }
+            _ => Ok(None)
+        }
+    }
+
+    fn parse_church_number(&mut self) -> Result<Option<Expr>, ParseError> {
+        match self.lexer.peek_token()?.value {
+            TokenValue::ChurchNumber(n) => {
+                self.lexer.next_token()?;
+                Ok(Some(Expr::church_numeral(n)))
             }
             _ => Ok(None)
         }
@@ -193,6 +206,29 @@ mod tests {
         let y = Expr::Var(Rc::new("y".into()));
         let z = Expr::Var(Rc::new("z".into()));
         let want = Expr::App(Box::new(Expr::App(Box::new(x), Box::new(y))), Box::new(z));
+        assert_eq!(e, want.into());
+    }
+
+    #[test]
+    fn parse_church_numbers() {
+        // c0 should parse as λf.λx.x
+        let e = parse("c0").unwrap();
+        let want = Expr::church_numeral(0);
+        assert_eq!(e, want.into());
+
+        // c2 should parse as λf.λx.f (f x)
+        let e = parse("c2").unwrap();
+        let want = Expr::church_numeral(2);
+        assert_eq!(e, want.into());
+    }
+
+    #[test]
+    fn parse_church_numbers_in_application() {
+        // c1 c2 should parse as application of church numerals
+        let e = parse("c1 c2").unwrap();
+        let c1 = Expr::church_numeral(1);
+        let c2 = Expr::church_numeral(2);
+        let want = Expr::App(Box::new(c1), Box::new(c2));
         assert_eq!(e, want.into());
     }
 

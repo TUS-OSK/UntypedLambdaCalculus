@@ -60,6 +60,16 @@ impl Lexer {
                         }
                     }
                     let s: String = self.input[start..i].iter().collect();
+                    
+                    // Check if it's a Church number (c followed by digits)
+                    if s.starts_with('c') && s.len() > 1 && s[1..].chars().all(|ch| ch.is_ascii_digit()) {
+                        if let Ok(num) = s[1..].parse::<u32>() {
+                            let tok = Token::new(TokenValue::ChurchNumber(num), start..i);
+                            self.peeked = Some(tok.clone());
+                            return Ok(tok);
+                        }
+                    }
+                    
                     let tok = Token::new(TokenValue::Ident(Rc::new(s)), start..i);
                     self.peeked = Some(tok.clone());
                     Ok(tok)
@@ -136,5 +146,19 @@ mod tests {
         // Inputs with leading digits should produce an error
         let res = tokenize("1x x2 _3");
         assert!(res.is_err());
+    }
+
+    #[test]
+    fn tokenize_church_numbers() {
+        let toks = tokenize("c0 c1 c2 c10").unwrap();
+        let s: Vec<String> = toks.iter().map(|t| t.value.to_string()).collect();
+        assert_eq!(s, vec!["c0", "c1", "c2", "c10"]);
+    }
+
+    #[test]
+    fn tokenize_church_numbers_mixed_with_identifiers() {
+        let toks = tokenize("c0 x c1 y c2").unwrap();
+        let s: Vec<String> = toks.iter().map(|t| t.value.to_string()).collect();
+        assert_eq!(s, vec!["c0", "x", "c1", "y", "c2"]);
     }
 }

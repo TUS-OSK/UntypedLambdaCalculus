@@ -71,6 +71,26 @@ impl Expr {
         }
     }
 
+    /// Generate a Church numeral for the given number
+    /// Church numeral for n is λf.λx.(f (f ... (f x) ... ))
+    /// where f is applied n times to x
+    pub fn church_numeral(n: u32) -> Self {
+        let f = Rc::new("f".to_string());
+        let x = Rc::new("x".to_string());
+        
+        // Build the inner application: f applied n times to x
+        let mut body = Expr::Var(x.clone());
+        for _ in 0..n {
+            body = Expr::App(Box::new(Expr::Var(f.clone())), Box::new(body));
+        }
+        
+        // Wrap in λx.body
+        let inner_abs = Expr::Abs(x, Box::new(body));
+        
+        // Wrap in λf.inner_abs  
+        Expr::Abs(f, Box::new(inner_abs))
+    }
+
     /// Analyze variable binding: produce an `AnalyzedExpr` where each variable is
     /// labeled `Free` or `Bound(name, debruijn_index)` (index counts binders
     /// between occurrence and its binder).
@@ -148,6 +168,48 @@ impl Display for AnalyzedExpr {
 }
 
 impl AnalyzedExpr {
+    /// Check if this expression is a Church numeral and return its value
+    /// Church numeral has the form λf.λx.(f (f ... (f x) ... ))
+    pub fn as_church_numeral(&self) -> Option<u32> {
+        match self {
+            AnalyzedExpr::Abs(_f_param, body) => {
+                if let AnalyzedExpr::Abs(_x_param, inner_body) = body.as_ref() {
+                    // Check if inner_body is of the form f^n x where f is bound at index 1 and x is bound at index 0
+                    count_church_applications(inner_body.as_ref(), 1, 0)
+                } else {
+                    None
+                }
+            }
+            _ => None
+        }
+    }
+
+    /// Try to find a matching variable name for this expression
+    pub fn find_variable_match(&self, variables: &[(Rc<String>, AnalyzedExpr)]) -> Option<Rc<String>> {
+        for (name, value) in variables.iter().rev() {
+            if self == value {
+                return Some(name.clone());
+            }
+        }
+        None
+    }
+
+    /// Get a readable representation of this expression, preferring Church numbers or variable names
+    pub fn display_interpreted(&self, variables: &[(Rc<String>, AnalyzedExpr)]) -> String {
+        // First, try to find a matching variable
+        if let Some(var_name) = self.find_variable_match(variables) {
+            return var_name.to_string();
+        }
+        
+        // Then, try to interpret as Church numeral
+        if let Some(n) = self.as_church_numeral() {
+            return format!("c{}", n);
+        }
+        
+        // Default to normal display
+        self.to_string()
+    }
+
     fn is_value(&self) -> bool {
         match self {
             AnalyzedExpr::Abs(_, _) | AnalyzedExpr::Free(_) => true,
@@ -500,5 +562,29 @@ mod tests {
             )),
         );
         assert_eq!(a, want);
+    }
+}
+
+/// Helper function to count Church numeral applications
+/// Counts how many times f (bound at f_index) is applied to the final x (bound at x_index)
+fn count_church_applications(expr: &AnalyzedExpr, f_index: usize, x_index: usize) -> Option<u32> {
+    match expr {
+        // Base case: just x
+        AnalyzedExpr::Bound(_, idx) if *idx == x_index => Some(0),
+        // f applied to something
+        AnalyzedExpr::App(func, arg) => {
+            if let AnalyzedExpr::Bound(_, idx) = func.as_ref() {
+                if *idx == f_index {
+                    // This is f applied to arg, count recursively
+                    let inner_count = count_church_applications(arg.as_ref(), f_index, x_index)?;
+                    Some(inner_count + 1)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        }
+        _ => None,
     }
 }

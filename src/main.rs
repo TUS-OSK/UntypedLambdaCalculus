@@ -62,11 +62,15 @@ fn handle_input(input: &str, variables: &mut Vec<(Rc<String>, AnalyzedExpr)>) ->
         Ok(Stmt::Expr(expr)) => {
             let analyzed = expr.analyze();
             let reduced = evaluate(analyzed, &variables);
+            let interpreted = reduced.display_interpreted(&variables);
             println!("{} -> {}", expr, reduced);
+            println!("=> {}", interpreted);
         }
         Ok(Stmt::Def(name, expr)) => {
             let analyzed = expr.analyze();
+            let interpreted = analyzed.display_interpreted(&variables);
             println!("{} = {}", name, analyzed);
+            println!("=> {}", interpreted);
             variables.push((name, analyzed));
         }
         Err(e) => {
