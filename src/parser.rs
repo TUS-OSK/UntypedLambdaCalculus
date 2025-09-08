@@ -128,9 +128,9 @@ impl Parser {
         let prim = match tok.value {
             TokenValue::True => PrimitiveValue::True,
             TokenValue::False => PrimitiveValue::False,
-            TokenValue::Num(num) => {
+            TokenValue::Nat(num) => {
                 self.lexer.next_token()?;
-                return Ok(Some(Self::expand_num(num, tok.span)));
+                return Ok(Some(Self::expand_nat(num, tok.span)));
             }
             _ => return Ok(None)
         };
@@ -138,7 +138,7 @@ impl Parser {
         Ok(Some(Expr::PrimVal(prim, tok.span)))
     }
 
-    fn expand_num(n: usize, span: Range<usize>) -> Expr {
+    fn expand_nat(n: usize, span: Range<usize>) -> Expr {
         let mut expr = Expr::PrimVal(PrimitiveValue::Zero, span.clone());
         for _ in 0..n {
             expr = Expr::App(Box::new(Expr::PrimFunc(PrimitiveFunction::Succ, span.clone())), Box::new(expr));

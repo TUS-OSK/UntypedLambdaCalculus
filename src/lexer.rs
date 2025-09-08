@@ -80,7 +80,7 @@ impl Lexer {
                         break;
                     }
                 }
-                let tok = Token::new(TokenValue::Num(num), start..i);
+                let tok = Token::new(TokenValue::Nat(num), start..i);
                 self.peeked = Some(tok.clone());
                 return Ok(tok);
             }

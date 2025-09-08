@@ -10,7 +10,7 @@ displayable_enum! {
         If: "if",
         Then: "then",
         Else: "else",
-        Num(num: usize): "{num}",
+        Nat(n: usize): "{n}",
         Succ: "succ",
         Pred: "pred",
         IsZero: "iszero",

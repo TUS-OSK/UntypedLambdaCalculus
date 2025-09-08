@@ -403,8 +403,12 @@ impl AnalyzedExpr {
                         *self = *aa_owned;
                         return Ok(());
                     }
+                    Self::PrimVal(PrimitiveValue::Zero) => {
+                        *self = AnalyzedExpr::PrimVal(PrimitiveValue::Zero);
+                        return Ok(());
+                    }
                     _ => {
-                        return Err(EvaluationError::new("Expected succ of number value"));
+                        return Err(EvaluationError::new("Expected number value"));
                     }
                 }
             }
