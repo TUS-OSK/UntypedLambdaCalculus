@@ -1,9 +1,13 @@
-mod greek;
-mod commands;
-mod token;
-mod lexer;
+#[macro_use]
+mod enum_util;
+
 mod ast;
+mod commands;
+mod greek;
+mod lexer;
 mod parser;
+mod pretty_printer;
+mod token;
 
 use std::io;
 use std::rc::Rc;
@@ -12,7 +16,7 @@ use ariadne::Source;
 
 use ast::Stmt;
 
-use crate::ast::AnalyzedExpr;
+use crate::ast::{AnalyzedExpr, EvaluationError};
 
 fn main() -> io::Result<()> {
     let mut history = Vec::new();
@@ -49,25 +53,43 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
-fn evaluate(mut expr: AnalyzedExpr, variables: &Vec<(Rc<String>, AnalyzedExpr)>) -> AnalyzedExpr {
+fn evaluate(mut expr: AnalyzedExpr, variables: &Vec<(Rc<String>, AnalyzedExpr)>) -> Result<AnalyzedExpr, EvaluationError> {
     for (name, value) in variables.iter().rev() {
         expr.substitute_free(name, value);
     }
-    expr.reduce();
-    expr
+    expr.reduce()?;
+    Ok(expr)
 }
 
 fn handle_input(input: &str, variables: &mut Vec<(Rc<String>, AnalyzedExpr)>) -> io::Result<()> {
     match parser::parse(input) {
         Ok(Stmt::Expr(expr)) => {
-            let analyzed = expr.analyze();
-            let reduced = evaluate(analyzed, &variables);
-            println!("{} -> {}", expr, reduced);
+            let analyzed = match expr.analyze() {
+                Ok(a) => a,
+                Err(e) => {
+                    e.report().print(Source::from(input.to_string()))?;
+                    return Ok(());
+                }
+            };
+            match evaluate(analyzed, &variables) {
+                Ok(reduced) => if let Some(n) = reduced.get_number_value() {
+                    println!("{expr} -> {reduced} ({n})");
+                } else {
+                    println!("{expr} -> {reduced}");
+                },
+                Err(e) => println!("{}", e.message),
+            }
         }
         Ok(Stmt::Def(name, expr)) => {
-            let analyzed = expr.analyze();
-            println!("{} = {}", name, analyzed);
-            variables.push((name, analyzed));
+            match expr.analyze() {
+                Ok(analyzed) => {
+                    println!("{name} = {analyzed}");
+                    variables.push((name, analyzed));
+                }
+                Err(e) => {
+                    e.report().print(Source::from(input.to_string()))?;
+                }
+            }
         }
         Err(e) => {
             e.report().print(Source::from(input.to_string()))?;

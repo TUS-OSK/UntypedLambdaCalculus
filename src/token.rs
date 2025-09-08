@@ -1,29 +1,25 @@
-use std::fmt::{self, Display, Formatter};
 use std::ops::Range;
 use std::rc::Rc;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TokenValue {
-    Ident(Rc<String>),
-    Lambda,
-    Dot,
-    LParen,
-    RParen,
-    Eq,
-    EOF
-}
-
-impl Display for TokenValue {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            TokenValue::Ident(name) => write!(f, "{}", name),
-            TokenValue::Lambda => write!(f, "λ"),
-            TokenValue::Dot => write!(f, "."),
-            TokenValue::LParen => write!(f, "("),
-            TokenValue::RParen => write!(f, ")"),
-            TokenValue::Eq => write!(f, "="),
-            TokenValue::EOF => write!(f, "<EOF>"),
-        }
+displayable_enum! {
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub enum TokenValue {
+        Ident(ident: Rc<String>): "{ident}",
+        True: "true",
+        False: "false",
+        If: "if",
+        Then: "then",
+        Else: "else",
+        Num(num: usize): "{num}",
+        Succ: "succ",
+        Pred: "pred",
+        IsZero: "iszero",
+        Lambda: "λ",
+        Dot: ".",
+        LParen: "(",
+        RParen: ")",
+        Eq: "=",
+        EOF: "<EOF>"
     }
 }
 

@@ -3,6 +3,8 @@ use std::ops::Range;
 use ariadne::{Label, Report, ReportKind};
 
 use crate::ast::Expr;
+use crate::ast::PrimitiveFunction;
+use crate::ast::PrimitiveValue;
 use crate::ast::Stmt;
 use crate::lexer::Lexer;
 use crate::token::{Token, TokenValue};
@@ -54,7 +56,7 @@ impl Parser {
     }
 
     /// Parse a top-level statement: either a definition `name = expr` or an expression
-    pub fn parse_statement(&mut self) -> Result<Stmt, ParseError> {
+    fn parse_statement(&mut self) -> Result<Stmt, ParseError> {
         // Peek first token
         let first_tok = self.lexer.peek_token()?;
         match first_tok.value {
@@ -69,7 +71,7 @@ impl Parser {
                 }
 
                 // Not a definition — treat the consumed identifier as first atom and parse remaining application
-                let expr = self.parse_tailing_rec(Expr::Var(name))?;
+                let expr = self.parse_tailing_rec(Expr::Var(name, first_tok.span))?;
                 Ok(Stmt::Expr(expr))
             }
             _ => {
@@ -92,16 +94,24 @@ impl Parser {
 
     // E' -> A E' | ε
     fn parse_tailing_rec(&mut self, left: Expr) -> Result<Expr, ParseError> {
-        let right = match self.parse_atom()? {
-            Some(expr) => expr,
+        match self.parse_atom()? {
+            Some(right) => self.parse_tailing_rec(Expr::App(Box::new(left), Box::new(right))),
             None => return Ok(left),
-        };
-        self.parse_tailing_rec(Expr::App(Box::new(left), Box::new(right)))
+        }
     }
 
-    // A -> Ident | App | (E)
+    // A -> PrimVal | PrimFunc | Ident | Abs | Cond | (E)
     fn parse_atom(&mut self) -> Result<Option<Expr>, ParseError> {
+        if let Some(expr) = self.parse_prim_val()? {
+            return Ok(Some(expr));
+        }
+        if let Some(expr) = self.parse_prim_func()? {
+            return Ok(Some(expr));
+        }
         if let Some(expr) = self.parse_ident()? {
+            return Ok(Some(expr));
+        }
+        if let Some(expr) = self.parse_cond()? {
             return Ok(Some(expr));
         }
         if let Some(expr) = self.parse_abs()? {
@@ -113,18 +123,54 @@ impl Parser {
         Ok(None)
     }
 
+    fn parse_prim_val(&mut self) -> Result<Option<Expr>, ParseError> {
+        let tok = self.lexer.peek_token()?;
+        let prim = match tok.value {
+            TokenValue::True => PrimitiveValue::True,
+            TokenValue::False => PrimitiveValue::False,
+            TokenValue::Num(num) => {
+                self.lexer.next_token()?;
+                return Ok(Some(Self::expand_num(num, tok.span)));
+            }
+            _ => return Ok(None)
+        };
+        self.lexer.next_token()?;
+        Ok(Some(Expr::PrimVal(prim, tok.span)))
+    }
+
+    fn expand_num(n: usize, span: Range<usize>) -> Expr {
+        let mut expr = Expr::PrimVal(PrimitiveValue::Zero, span.clone());
+        for _ in 0..n {
+            expr = Expr::App(Box::new(Expr::PrimFunc(PrimitiveFunction::Succ, span.clone())), Box::new(expr));
+        }
+        expr
+    }
+
+    fn parse_prim_func(&mut self) -> Result<Option<Expr>, ParseError> {
+        let tok = self.lexer.peek_token()?;
+        let prim_func = match tok.value {
+            TokenValue::Succ => PrimitiveFunction::Succ,
+            TokenValue::Pred => PrimitiveFunction::Pred,
+            TokenValue::IsZero => PrimitiveFunction::IsZero,
+            _ => return Ok(None)
+        };
+        self.lexer.next_token()?;
+        Ok(Some(Expr::PrimFunc(prim_func, tok.span)))
+    }
+
     fn parse_ident(&mut self) -> Result<Option<Expr>, ParseError> {
-        match self.lexer.peek_token()?.value {
+        let tok = self.lexer.peek_token()?;
+        match tok.value {
             TokenValue::Ident(name) => {
                 self.lexer.next_token()?;
-                Ok(Some(Expr::Var(name)))
+                Ok(Some(Expr::Var(name, tok.span)))
             }
             _ => Ok(None)
         }
     }
 
     fn parse_abs(&mut self) -> Result<Option<Expr>, ParseError> {
-        if let TokenValue::Lambda = self.lexer.peek_token()?.value {
+        if let Token { value: TokenValue::Lambda, span } = self.lexer.peek_token()? {
             self.lexer.next_token()?;
             let ident = match self.lexer.next_token()? {
                 Token { value: TokenValue::Ident(name), .. } => name,
@@ -134,7 +180,27 @@ impl Parser {
                 Token { value: TokenValue::Dot, .. } => {},
                 Token { span, .. } => return Err(ParseError::new("Expected '.' after lambda parameter", span)),
             }
-            Ok(Some(Expr::Abs(ident, Box::new(self.parse_expr()?))))
+            Ok(Some(Expr::Abs(ident, Box::new(self.parse_expr()?), span.start)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn parse_cond(&mut self) -> Result<Option<Expr>, ParseError> {
+        if let Token { value: TokenValue::If, span } = self.lexer.peek_token()? {
+            self.lexer.next_token()?;
+            let cond = self.parse_expr()?;
+            match self.lexer.next_token()? {
+                Token { value: TokenValue::Then, .. } => {},
+                Token { span, .. } => return Err(ParseError::new("Expected 'then' after condition", span)),
+            }
+            let then_branch = self.parse_expr()?;
+            match self.lexer.next_token()? {
+                Token { value: TokenValue::Else, .. } => {},
+                Token { span, .. } => return Err(ParseError::new("Expected 'else' after then-branch", span)),
+            }
+            let else_branch = self.parse_expr()?;
+            Ok(Some(Expr::Cond(Box::new(cond), Box::new(then_branch), Box::new(else_branch), span.start)))
         } else {
             Ok(None)
         }
@@ -163,14 +229,14 @@ mod tests {
     #[test]
     fn parse_var() {
         let e = parse("x").unwrap();
-        let want = Expr::Var(Rc::new("x".to_string()));
+        let want = Expr::Var(Rc::new("x".to_string()), 0..1);
         assert_eq!(e, want.into());
     }
 
     #[test]
     fn parse_lambda() {
         let e = parse("λx.x").unwrap();
-        let want = Expr::Abs(Rc::new("x".into()), Box::new(Expr::Var(Rc::new("x".into()))));
+        let want = Expr::Abs(Rc::new("x".into()), Box::new(Expr::Var(Rc::new("x".into()), 3..4)), 0);
         assert_eq!(e, want.into());
     }
 
@@ -178,9 +244,9 @@ mod tests {
     fn parse_app_left_assoc() {
         // x y z -> ((x y) z)
         let e = parse("x y z").unwrap();
-        let x = Expr::Var(Rc::new("x".into()));
-        let y = Expr::Var(Rc::new("y".into()));
-        let z = Expr::Var(Rc::new("z".into()));
+        let x = Expr::Var(Rc::new("x".into()), 0..1);
+        let y = Expr::Var(Rc::new("y".into()), 2..3);
+        let z = Expr::Var(Rc::new("z".into()), 4..5);
         let want = Expr::App(Box::new(Expr::App(Box::new(x), Box::new(y))), Box::new(z));
         assert_eq!(e, want.into());
     }
@@ -189,9 +255,9 @@ mod tests {
     fn parse_paren_grouping() {
         // (x y) z -> ((x y) z)
         let e = parse("(x y) z").unwrap();
-        let x = Expr::Var(Rc::new("x".into()));
-        let y = Expr::Var(Rc::new("y".into()));
-        let z = Expr::Var(Rc::new("z".into()));
+        let x = Expr::Var(Rc::new("x".into()), 1..2);
+        let y = Expr::Var(Rc::new("y".into()), 3..4);
+        let z = Expr::Var(Rc::new("z".into()), 6..7);
         let want = Expr::App(Box::new(Expr::App(Box::new(x), Box::new(y))), Box::new(z));
         assert_eq!(e, want.into());
     }
@@ -201,7 +267,7 @@ mod tests {
         let mut p = Parser::new(Lexer::new("id = λx.x"));
         match p.parse_statement().unwrap() {
             Stmt::Def(name, expr) => {
-                assert_eq!(&*name, "id");
+                assert_eq!(name.as_ref(), "id");
                 assert_eq!(expr.to_string(), "λx.x");
             }
             _ => panic!("expected definition"),

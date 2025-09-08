@@ -23,21 +23,38 @@ pub fn handle_command(line: &str, variables: &mut Vec<(Rc<String>, AnalyzedExpr)
             Ok(false)
         }
         "/export" => {
-            let path = parts.next().unwrap_or("lambda_vars.txt");
-            match export_variables(path, variables) {
+            // allow paths with spaces: take the rest of the line after the command
+            let rest = line[cmd.len()..].trim();
+            let unquote = |s: &str| -> String {
+                let t = s.trim();
+                if t.len() >= 2 && ((t.starts_with('"') && t.ends_with('"')) || (t.starts_with('\'') && t.ends_with('\''))) {
+                    t[1..t.len()-1].to_string()
+                } else { t.to_string() }
+            };
+            let path_buf = if rest.is_empty() { "lambda_vars.txt".to_string() } else { unquote(rest) };
+            match export_variables(&path_buf, variables) {
                 Ok(b) => Ok(b),
                 Err(e) => { println!("export error: {}", e); Ok(false) }
             }
         }
         "/import" => {
-            if let Some(path) = parts.next() {
-                match import_variables(path, variables) {
+            // allow paths with spaces: take the rest of the line after the command
+            let rest = line[cmd.len()..].trim();
+            if rest.is_empty() {
+                println!("missing filename for /import");
+                Ok(false)
+            } else {
+                let unquote = |s: &str| -> String {
+                    let t = s.trim();
+                    if t.len() >= 2 && ((t.starts_with('"') && t.ends_with('"')) || (t.starts_with('\'') && t.ends_with('\''))) {
+                        t[1..t.len()-1].to_string()
+                    } else { t.to_string() }
+                };
+                let path_buf = unquote(rest);
+                match import_variables(&path_buf, variables) {
                     Ok(b) => Ok(b),
                     Err(e) => { println!("import error: {}", e); Ok(false) }
                 }
-            } else {
-                println!("missing filename for /import");
-                Ok(false)
             }
         }
         _ => {

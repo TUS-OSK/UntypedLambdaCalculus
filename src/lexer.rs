@@ -3,12 +3,6 @@ use std::rc::Rc;
 use crate::parser::ParseError;
 use crate::token::{Token, TokenValue};
 
-/// Simple streaming lexer for a minimal untyped lambda calculus.
-///
-/// Recognized tokens:
-/// - Ident: a contiguous run of unicode alphanumeric characters or underscore
-/// - Lambda: the character 'λ' or backslash '\\'
-/// - Dot: '.'
 pub struct Lexer {
     input: Vec<char>,
     pos: usize,
@@ -48,43 +42,64 @@ impl Lexer {
             ')' => TokenValue::RParen,
             '.' => TokenValue::Dot,
             '=' => TokenValue::Eq,
-            c => {
-                return if c.is_alphabetic() || c == '_' {
-                    let start = i;
-                    while i < len {
-                        let cc = self.input[i];
-                        if cc.is_alphanumeric() || cc == '_' {
-                            i += 1;
-                        } else {
-                            break;
-                        }
+            c if c.is_alphabetic() || c == '_' => {
+                let start = i;
+                while i < len {
+                    let cc = self.input[i];
+                    if cc.is_alphanumeric() || cc == '_' {
+                        i += 1;
+                    } else {
+                        break;
                     }
-                    let s: String = self.input[start..i].iter().collect();
-                    let tok = Token::new(TokenValue::Ident(Rc::new(s)), start..i);
-                    self.peeked = Some(tok.clone());
-                    Ok(tok)
-                } else {
-                    Err(ParseError::new(format!("unexpected character '{}'", c), i..(i + 1)))
                 }
+                let s = self.input[start..i].iter().collect::<String>();
+                let tok_val = match s.as_ref() {
+                    "true" => TokenValue::True,
+                    "false" => TokenValue::False,
+                    "if" => TokenValue::If,
+                    "then" => TokenValue::Then,
+                    "else" => TokenValue::Else,
+                    "succ" => TokenValue::Succ,
+                    "pred" => TokenValue::Pred,
+                    "iszero" => TokenValue::IsZero,
+                    _ => TokenValue::Ident(Rc::new(s))
+                };
+                let tok = Token::new(tok_val, start..i);
+                self.peeked = Some(tok.clone());
+                return Ok(tok);
+            }
+            c if c.is_ascii_digit() => {
+                let start = i;
+                let mut num: usize = 0;
+                while i < len {
+                    let cc = self.input[i];
+                    if cc.is_ascii_digit() {
+                        i += 1;
+                        num = num * 10 + (cc.to_digit(10).unwrap() as usize);
+                    } else {
+                        break;
+                    }
+                }
+                let tok = Token::new(TokenValue::Num(num), start..i);
+                self.peeked = Some(tok.clone());
+                return Ok(tok);
+            }
+            _ => {
+                return Err(ParseError::new("Unexpected character", i..i));
             }
         };
         i += 1;
         let tok = Token::new(token_value, i - 1..i);
         self.peeked = Some(tok.clone());
-        Ok(tok)
+        Ok(tok) 
     }
 
-    /// Return the next token or None at EOF. Returns Err on unexpected characters.
+    /// Return the next token. Returns Err on unexpected characters.
     pub fn next_token(&mut self) -> Result<Token, ParseError> {
-        // Ensure cache is populated
-        self.peek_token()?;
-
-        if let Some(tok) = self.peeked.take() {
-            self.pos = tok.span.end;
-            Ok(tok)
-        } else {
-            unreachable!()
-        }
+        let tok = self.peek_token()?;
+        self.peeked = None;
+        self.pos = tok.span.end;
+        Ok(tok)
     }
 }
 
