@@ -72,7 +72,7 @@ fn handle_input(input: &str, variables: &mut Vec<(Rc<String>, AnalyzedExpr)>) ->
                 }
             };
             match evaluate(analyzed, &variables) {
-                Ok(reduced) => if let Some(n) = reduced.get_number_value() {
+                Ok(reduced) => if let Some(n) = reduced.get_number_value() && n != 0 {
                     println!("{expr} -> {reduced} ({n})");
                 } else {
                     println!("{expr} -> {reduced}");
