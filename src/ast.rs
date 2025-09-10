@@ -381,13 +381,13 @@ impl AnalyzedExpr {
                 } else if let Self::Free(..) = f.as_ref() {
                     Ok(())
                 } else {
-                    Err(EvaluationError::new("Expected lambda abstraction"))
+                    Err(EvaluationError::new(format!("Expected lambda abstraction, got {}", f.as_ref())))
                 }
             }
             Self::PrimApp(PrimitiveFunction::Succ, a) => {
                 a.reduce()?;
                 if a.get_number_value().is_none() {
-                    Err(EvaluationError::new("Expected number value"))
+                    Err(EvaluationError::new(format!("Expected number value, got {}", a.as_ref())))
                 } else {
                     Ok(())
                 }
@@ -405,14 +405,14 @@ impl AnalyzedExpr {
                         return Ok(());
                     }
                     _ => {
-                        return Err(EvaluationError::new("Expected number value"));
+                        return Err(EvaluationError::new(format!("Expected number value, got {}", a.as_ref())));
                     }
                 }
             }
             Self::PrimApp(PrimitiveFunction::IsZero, a) => {
                 a.reduce()?;
                 if a.get_number_value().is_none() {
-                    Err(EvaluationError::new("Expected number value"))
+                    Err(EvaluationError::new(format!("Expected number value, got {}", a.as_ref())))
                 } else {
                     *self = if a.as_ref() == &Self::PrimVal(PrimitiveValue::Zero) {
                         Self::PrimVal(PrimitiveValue::True)
@@ -434,7 +434,7 @@ impl AnalyzedExpr {
                         e
                     }
                     _ => {
-                        return Err(EvaluationError::new("Expected boolean value"));
+                        return Err(EvaluationError::new(format!("Expected boolean value, got {}", c.as_ref())));
                     }
                 };
                 let b_owned = mem::replace(b, Self::empty());
