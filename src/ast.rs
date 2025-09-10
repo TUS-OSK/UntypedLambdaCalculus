@@ -1,4 +1,5 @@
 use std::fmt;
+use std::mem;
 use std::rc::Rc;
 use std::str::FromStr;
 
@@ -38,7 +39,7 @@ displayable_enum! {
             } else {
                 write!(f, "{func}")?;
             }
-            if matches!(arg.as_ref(), Expr::App(..)) {
+            if let Expr::App(..) = arg.as_ref() {
                 write!(f, " ({arg})")?;
             } else {
                 write!(f, " {arg}")?;
@@ -168,16 +169,6 @@ impl EvaluationError {
     }
 }
 
-thread_local! {
-    static EMPTY: AnalyzedExpr = AnalyzedExpr::Free(Rc::default());
-}
-
-impl Default for AnalyzedExpr {
-    fn default() -> Self {
-        EMPTY.with(|e| e.clone())
-    }
-}
-
 impl fmt::Debug for AnalyzedExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.print(&mut PrettyPrinter::new(f, 2))
@@ -185,6 +176,10 @@ impl fmt::Debug for AnalyzedExpr {
 }
 
 impl AnalyzedExpr {
+
+    fn empty() -> Box<Self> {
+        Box::new(Self::PrimVal(PrimitiveValue::Zero))
+    }
 
     fn is_greedy(&self) -> bool {
         match self {
@@ -378,10 +373,12 @@ impl AnalyzedExpr {
                 f.reduce()?;
                 a.reduce()?;
                 if let Self::Abs(_, body) = f.as_mut() {
-                    let mut body_owned = std::mem::take(body);
-                    let arg_owned = std::mem::take(a);
+                    let mut body_owned = mem::replace(body, Self::empty());
+                    let arg_owned = mem::replace(a, Self::empty());
                     body_owned.substitute_top(&arg_owned);
                     *self = *body_owned;
+                    Ok(())
+                } else if let Self::Free(..) = f.as_ref() {
                     Ok(())
                 } else {
                     Err(EvaluationError::new("Expected lambda abstraction"))
@@ -399,12 +396,12 @@ impl AnalyzedExpr {
                 a.reduce()?;
                 match a.as_mut() {
                     Self::PrimApp(PrimitiveFunction::Succ, aa) if aa.get_number_value().is_some() => {
-                        let aa_owned = std::mem::take(aa);
+                        let aa_owned = mem::replace(aa, Self::empty());
                         *self = *aa_owned;
                         return Ok(());
                     }
                     Self::PrimVal(PrimitiveValue::Zero) => {
-                        *self = AnalyzedExpr::PrimVal(PrimitiveValue::Zero);
+                        *self = Self::PrimVal(PrimitiveValue::Zero);
                         return Ok(());
                     }
                     _ => {
@@ -417,10 +414,10 @@ impl AnalyzedExpr {
                 if a.get_number_value().is_none() {
                     Err(EvaluationError::new("Expected number value"))
                 } else {
-                    *self = if a.as_ref() == &AnalyzedExpr::PrimVal(PrimitiveValue::Zero) {
-                        AnalyzedExpr::PrimVal(PrimitiveValue::True)
+                    *self = if a.as_ref() == &Self::PrimVal(PrimitiveValue::Zero) {
+                        Self::PrimVal(PrimitiveValue::True)
                     } else {
-                        AnalyzedExpr::PrimVal(PrimitiveValue::False)
+                        Self::PrimVal(PrimitiveValue::False)
                     };
                     Ok(())
                 }
@@ -428,11 +425,11 @@ impl AnalyzedExpr {
             Self::Cond(c, t, e) => {
                 c.reduce()?;
                 let b = match c.as_ref() {
-                    AnalyzedExpr::PrimVal(PrimitiveValue::True) => {
+                    Self::PrimVal(PrimitiveValue::True) => {
                         t.reduce()?;
                         t
                     }
-                    AnalyzedExpr::PrimVal(PrimitiveValue::False) => {
+                    Self::PrimVal(PrimitiveValue::False) => {
                         e.reduce()?;
                         e
                     }
@@ -440,7 +437,7 @@ impl AnalyzedExpr {
                         return Err(EvaluationError::new("Expected boolean value"));
                     }
                 };
-                let b_owned = std::mem::take(b);
+                let b_owned = mem::replace(b, Self::empty());
                 *self = *b_owned;
                 Ok(())
             }
