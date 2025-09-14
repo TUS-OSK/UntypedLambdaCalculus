@@ -324,7 +324,6 @@ impl AnalyzedExpr {
         let mut v1 = val.clone();
         v1.shift(1, 0);
         self.subst(0, &v1, 0);
-        self.shift(-1, 0);
     }
 
     /// Substitute free variable occurrences of `name` with `val` in-place.
@@ -376,6 +375,7 @@ impl AnalyzedExpr {
                     let mut body_owned = mem::replace(body, Self::empty());
                     let arg_owned = mem::replace(a, Self::empty());
                     body_owned.substitute_top(&arg_owned);
+                    body_owned.shift(-1, 0);
                     *self = *body_owned;
                     Ok(())
                 } else if let Self::Free(..) = f.as_ref() {
